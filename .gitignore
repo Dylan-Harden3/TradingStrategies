@@ -1,4 +1,4 @@
 *.csv
 *.pkl
-*.py
 /Stocks
+__pycache__

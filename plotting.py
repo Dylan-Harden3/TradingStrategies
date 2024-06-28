@@ -1,8 +1,14 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+from typing import List, Dict, Any
 
-def plot_entries_per_year(stock_df):
+def plot_entries_per_year(stock_df: pd.DataFrame) -> None:
+    """
+    Plot the number of entries per year in the stock DataFrame.
+
+    :param stock_df: Input DataFrame containing stock data
+    """
     df = stock_df.copy()
     df['Year'] = df['Date'].dt.year
 
@@ -18,7 +24,16 @@ def plot_entries_per_year(stock_df):
     plt.xticks(rotation=60)
     plt.show()
 
-def plot_returns(dates, daily_returns, cumulative_returns, portfolio_values, metrics):
+def plot_returns(dates: List[pd.Timestamp], daily_returns: List[float], cumulative_returns: List[float], portfolio_values: List[float], metrics: Dict[str, float]) -> None:
+    """
+    Plot returns, portfolio value, and metrics.
+
+    :param dates: List of dates
+    :param daily_returns: List of daily returns
+    :param cumulative_returns: List of cumulative returns
+    :param portfolio_values: List of portfolio values
+    :param metrics: Dictionary containing performance metrics
+    """
     fig, axs = plt.subplots(2, 1, figsize=(14, 18))
     
     # Plot 1: Cumulative Returns and Portfolio Value
@@ -61,7 +76,12 @@ def plot_returns(dates, daily_returns, cumulative_returns, portfolio_values, met
     plt.tight_layout()
     plt.show()
 
-def plot_comparative_returns(results):
+def plot_comparative_returns(results: Dict[str, Dict[str, Any]]) -> None:
+    """
+    Plot comparative returns for multiple strategies.
+
+    :param results: Dictionary containing results for each strategy
+    """
     fig, axs = plt.subplots(2, 1, figsize=(14, 18))
     
     colors = ['blue', 'red']
@@ -105,7 +125,12 @@ def plot_comparative_returns(results):
     plt.tight_layout()
     plt.show()
 
-def print_comparative_metrics(results):
+def print_comparative_metrics(results: Dict[str, Dict[str, Any]]) -> None:
+    """
+    Print comparative metrics for multiple strategies.
+
+    :param results: Dictionary containing results for each strategy
+    """
     for strategy_name, data in results.items():
         print(f"\nMetrics for {strategy_name}:")
         for key, value in data['metrics'].items():

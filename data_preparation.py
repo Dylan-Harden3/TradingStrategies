@@ -4,11 +4,16 @@ import ta
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 import os
-import pandas as pd
 from pandas.errors import EmptyDataError
+from typing import List, Tuple
 
+def load_df(tickers: List[str]) -> pd.DataFrame:
+    """
+    Load stock data from text files for specified tickers.
 
-def load_df(tickers):
+    :param tickers: List of stock tickers to load
+    :return: DataFrame containing combined stock data for all tickers
+    """
     dataframes = []
     directory = os.path.join(os.getcwd() + '/Stocks')
 
@@ -17,7 +22,7 @@ def load_df(tickers):
             ticker = filename.replace('.us.txt', '').upper()
             file_path = os.path.join(directory, filename)
 
-            if ticker not in tickers: # if the ticker isnt in our list, ignore it
+            if ticker not in tickers:  # if the ticker isn't in our list, ignore it
                 continue
 
             try:
@@ -25,7 +30,7 @@ def load_df(tickers):
                 df['Ticker'] = ticker
                 df.sort_values('Date', inplace=True)
                 dataframes.append(df)
-            except EmptyDataError: # some of the files have no contents so read_csv throws error
+            except EmptyDataError:  # some of the files have no contents so read_csv throws error
                 pass
 
     stock_df = pd.concat(dataframes, ignore_index=True)
@@ -36,13 +41,22 @@ def load_df(tickers):
 
     return stock_df
 
-def get_features_df(stock_df, tickers, start_date, end_date, mode, signal_threshold=None):
+def get_features_df(stock_df: pd.DataFrame, tickers: List[str], start_date: str, end_date: str, mode: str, signal_threshold: float = None) -> pd.DataFrame:
+    """
+    Generate a DataFrame with technical indicators and trading signals.
 
+    :param stock_df: Input DataFrame containing stock data
+    :param tickers: List of stock tickers to process
+    :param start_date: Start date for filtering data
+    :param end_date: End date for filtering data
+    :param mode: 'train' or 'backtest' mode
+    :param signal_threshold: Threshold for generating trading signals (optional)
+    :return: DataFrame with added technical indicators and trading signals
+    """
     if mode == 'train' and Path(f'train_df_{signal_threshold}.csv').is_file():
         df = pd.read_csv(f'train_df_{signal_threshold}.csv')
         df.drop(columns=['Unnamed: 0'], inplace=True)
         return df
-
 
     if mode == 'backtest' and Path(f'backtest_df.csv').is_file():
         df = pd.read_csv(f'backtest_df.csv')
@@ -58,7 +72,13 @@ def get_features_df(stock_df, tickers, start_date, end_date, mode, signal_thresh
         (stock_df['Date'] <= end_date)
     ].copy()
 
-    def process_ticker(ticker_df):
+    def process_ticker(ticker_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Process a single ticker's DataFrame to add technical indicators and trading signals.
+
+        :param ticker_df: DataFrame for a single ticker
+        :return: Processed DataFrame with added features and signals
+        """
         if len(ticker_df) > 100:
             ticker_df = ta.add_all_ta_features(
                 ticker_df, open="Open", high="High", low="Low", close="Close", volume="Volume"
@@ -82,7 +102,17 @@ def get_features_df(stock_df, tickers, start_date, end_date, mode, signal_thresh
 
     return processed_df
 
-def get_train_test(stock_df, tickers, start_date, end_date, signal_threshold=None):
+def get_train_test(stock_df: pd.DataFrame, tickers: List[str], start_date: str, end_date: str, signal_threshold: float = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Split the data into training and testing sets.
+
+    :param stock_df: Input DataFrame containing stock data
+    :param tickers: List of stock tickers to process
+    :param start_date: Start date for filtering data
+    :param end_date: End date for filtering data
+    :param signal_threshold: Threshold for generating trading signals (optional)
+    :return: Tuple containing X_train, X_test, y_train, y_test
+    """
     train_df = get_features_df(stock_df, tickers, start_date, end_date, 'train', signal_threshold)
 
     excluded_features = ['Date', 'Ticker']
@@ -92,5 +122,11 @@ def get_train_test(stock_df, tickers, start_date, end_date, signal_threshold=Non
     X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
     return X_train, X_test, y_train, y_test
 
-def get_features(df):
+def get_features(df: pd.DataFrame) -> List[str]:
+    """
+    Get the list of feature columns from the DataFrame.
+
+    :param df: Input DataFrame
+    :return: List of feature column names
+    """
     return list(df.drop(columns=['Date', 'Ticker', 'trading_signal']).columns)

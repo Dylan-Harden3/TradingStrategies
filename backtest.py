@@ -1,11 +1,20 @@
-from typing import List
+from typing import List, Tuple
 import numpy as np
 import pandas as pd
 from strategies import Strategy, MLModelStrategy, Condition
 from scipy import stats
 
-
 def gen_signals(df: pd.DataFrame, date: str, main_strategy: MLModelStrategy, conditions: List[Condition], additional_strategies: List[Strategy] = []) -> pd.DataFrame:
+    """
+    Generate trading signals for a specific date using the main strategy, conditions, and additional strategies.
+
+    :param df: DataFrame containing all trading data
+    :param date: The date for which to generate signals
+    :param main_strategy: The primary ML strategy to use
+    :param conditions: List of conditions to apply to the signals
+    :param additional_strategies: List of additional strategies to apply
+    :return: DataFrame with generated signals for the specified date
+    """
     date_df = df.loc[df['Date'] == date].copy()
     if 'Unnamed: 0' in list(date_df.columns):
         date_df.drop(columns=['Unnamed: 0'], inplace=True)
@@ -25,7 +34,16 @@ def gen_signals(df: pd.DataFrame, date: str, main_strategy: MLModelStrategy, con
     
     return date_df[date_df['Signal'] != 0]
 
-def gen_trades(df: pd.DataFrame, main_strategy: MLModelStrategy, conditions: List[Condition], additional_strategies: List[Strategy] = []) -> pd.DataFrame:
+def gen_trades(df: pd.DataFrame, main_strategy: MLModelStrategy, conditions: List[Condition], additional_strategies: List[Strategy] = [], disable_shorting=False) -> pd.DataFrame:
+    """
+    Generate trades for all dates in the DataFrame.
+
+    :param df: DataFrame containing all trading data
+    :param main_strategy: The primary ML strategy to use
+    :param conditions: List of conditions to apply to the signals
+    :param additional_strategies: List of additional strategies to apply
+    :return: DataFrame with generated trades for all dates
+    """
     dataframes = []
     days = sorted(df['Date'].unique())
 
@@ -46,9 +64,10 @@ def gen_trades(df: pd.DataFrame, main_strategy: MLModelStrategy, conditions: Lis
             signals.loc[buy_mask & valid_buy_tickers, 'Buy'] = pred_day_data.loc[signals.loc[buy_mask & valid_buy_tickers, 'Ticker'], 'Open'].values
             signals.loc[buy_mask & valid_buy_tickers, 'Sell'] = pred_day_data.loc[signals.loc[buy_mask & valid_buy_tickers, 'Ticker'], 'Close'].values
 
-            valid_sell_tickers = signals.loc[sell_mask, 'Ticker'].isin(pred_day_data.index)
-            signals.loc[sell_mask & valid_sell_tickers, 'Buy'] = pred_day_data.loc[signals.loc[sell_mask & valid_sell_tickers, 'Ticker'], 'Close'].values
-            signals.loc[sell_mask & valid_sell_tickers, 'Sell'] = pred_day_data.loc[signals.loc[sell_mask & valid_sell_tickers, 'Ticker'], 'Open'].values
+            if not disable_shorting:
+                valid_sell_tickers = signals.loc[sell_mask, 'Ticker'].isin(pred_day_data.index)
+                signals.loc[sell_mask & valid_sell_tickers, 'Buy'] = pred_day_data.loc[signals.loc[sell_mask & valid_sell_tickers, 'Ticker'], 'Close'].values
+                signals.loc[sell_mask & valid_sell_tickers, 'Sell'] = pred_day_data.loc[signals.loc[sell_mask & valid_sell_tickers, 'Ticker'], 'Open'].values
 
         dataframes.append(signals)
     
@@ -56,7 +75,15 @@ def gen_trades(df: pd.DataFrame, main_strategy: MLModelStrategy, conditions: Lis
     trades_df['Date'] = pd.to_datetime(trades_df['Date'], format='%Y-%m-%d')
     return trades_df
 
-def compute_daily_returns(trades_df, initial_capital=100000):
+def compute_daily_returns(trades_df: pd.DataFrame, initial_capital: float = 100000) -> Tuple[List[pd.Timestamp], List[float], List[float], List[float], int, int, int, int, int]:
+    """
+    Compute daily returns and other metrics based on the trades.
+
+    :param trades_df: DataFrame containing trade information
+    :param initial_capital: Initial capital for the portfolio
+    :return: Tuple containing lists of dates, daily returns, cumulative returns, portfolio values,
+             and integers for number of trades, longs, shorts, long wins, and short wins
+    """
     dates = []
     daily_returns = []
     cumulative_returns = []
@@ -107,7 +134,20 @@ def compute_daily_returns(trades_df, initial_capital=100000):
     
     return dates, daily_returns, cumulative_returns, portfolio_values, num_trades, num_longs, num_shorts, num_long_wins, num_short_wins
 
-def compute_metrics(dates, daily_returns, cumulative_returns, num_trades, num_longs, num_shorts, num_long_wins, num_short_wins):
+def compute_metrics(dates: List[pd.Timestamp], daily_returns: List[float], cumulative_returns: List[float], num_trades: int, num_longs: int, num_shorts: int, num_long_wins: int, num_short_wins: int) -> dict:
+    """
+    Compute various performance metrics based on the trading results.
+
+    :param dates: List of dates for the trading period
+    :param daily_returns: List of daily returns
+    :param cumulative_returns: List of cumulative returns
+    :param num_trades: Total number of trades
+    :param num_longs: Number of long trades
+    :param num_shorts: Number of short trades
+    :param num_long_wins: Number of winning long trades
+    :param num_short_wins: Number of winning short trades
+    :return: Dictionary containing computed metrics
+    """
     daily_returns = pd.Series(daily_returns, index=dates)
     cumulative_returns = pd.Series(cumulative_returns, index=dates)
 

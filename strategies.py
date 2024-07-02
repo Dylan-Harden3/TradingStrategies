@@ -89,17 +89,21 @@ class TrendCrossoverStrategy(Strategy):
         self.slow_column = parameters.get("slow_column", self.slow_column)
 
 class MLModelStrategy(Strategy):
-    def __init__(self, name: str, model: Any, feature_columns: List[str]):
+    def __init__(self, name: str, model: Any, feature_columns: List[str], task: str = 'classification'):
         """
         Initialize the ML Model Strategy.
 
         :param name: Name of the strategy
         :param model: The machine learning model to use for predictions
         :param feature_columns: List of column names to use as features for the model
+        :param task: 'classification' or 'regression'
         """
         super().__init__(name)
         self.model = model
         self.feature_columns = feature_columns
+        self.task = task
+        if task not in ['classification', 'regression']:
+            raise ValueError("Task must be either 'classification' or 'regression'")
 
     def generate_signals(self, data: pd.DataFrame) -> pd.Series:
         """
@@ -117,7 +121,15 @@ class MLModelStrategy(Strategy):
 
         predictions = self.model.predict(features)
 
-        signals = pd.Series(predictions, index=data.index)
+        if self.task == 'classification':
+            signals = pd.Series(predictions, index=data.index)
+        elif self.task == 'regression':
+            # For regression, we need to compare the predicted price with the next day's open price
+            next_day_open = data['Open'].shift(-1)
+            signals = pd.Series(index=data.index)
+            signals[predictions > next_day_open] = 1  # Buy signal
+            signals[predictions <= next_day_open] = -1  # Sell signal
+            signals = signals.shift(1)  # Shift signals by 1 day to avoid look-ahead bias
 
         return signals
 
@@ -125,21 +137,27 @@ class MLModelStrategy(Strategy):
         """
         Get the current parameters of the strategy.
 
-        :return: A dictionary containing the model and feature columns
+        :return: A dictionary containing the model, feature columns, and task
         """
         return {
             "model": self.model,
-            "feature_columns": self.feature_columns
+            "feature_columns": self.feature_columns,
+            "task": self.task
         }
 
     def set_parameters(self, parameters: dict) -> None:
         """
         Set new parameters for the strategy.
 
-        :param parameters: A dictionary containing new values for model and/or feature_columns
+        :param parameters: A dictionary containing new values for model, feature_columns, and/or task
         """
         self.model = parameters.get("model", self.model)
         self.feature_columns = parameters.get("feature_columns", self.feature_columns)
+        new_task = parameters.get("task", self.task)
+        if new_task in ['classification', 'regression']:
+            self.task = new_task
+        else:
+            raise ValueError("Task must be either 'classification' or 'regression'")
 
 class Condition(ABC):
     def __init__(self, name: str):

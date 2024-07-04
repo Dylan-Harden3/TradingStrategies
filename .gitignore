@@ -2,3 +2,4 @@
 *.pkl
 /Stocks
 __pycache__
+/models

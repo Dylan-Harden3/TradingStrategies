@@ -6,6 +6,8 @@ from sklearn.model_selection import train_test_split
 import os
 from pandas.errors import EmptyDataError
 from typing import List, Tuple
+import torch
+from torch.utils.data import Dataset, DataLoader
 
 def load_df(tickers: List[str]) -> pd.DataFrame:
     """
@@ -104,6 +106,52 @@ def get_features_df(stock_df: pd.DataFrame, tickers: List[str], start_date: str,
         processed_df.to_csv(f'backtest_df_{task}.csv')
 
     return processed_df
+
+def get_rnn_dataset(df, seq_length):
+    df = df.sort_values(['Ticker', 'Date'])
+    feature_columns = [col for col in df.columns if col not in ['Date', 'Ticker', 'Unnamed: 0', 'target']]
+    grouped = df.groupby('Ticker')
+
+    def create_sequences(group, seq_length):
+        sequences = []
+        targets = []
+        
+        for i in range(len(group) - seq_length - 1):  # -1 to avoid lookahead bias
+            seq = group.iloc[i:i+seq_length]
+            target = group.iloc[i+seq_length]['Close']  # Next day's close
+            
+            sequences.append(seq[feature_columns].values)
+            targets.append(target)
+        
+        return np.array(sequences), np.array(targets)
+
+    X, y = zip(*grouped.apply(lambda x: create_sequences(x, seq_length)))
+
+    # Concatenate all sequences and targets
+    X = np.concatenate(X)
+    y = np.concatenate(y)
+
+    X_tensor = torch.FloatTensor(X)
+    y_tensor = torch.FloatTensor(y)
+
+    class StockDataset(Dataset):
+        def __init__(self, X, y):
+            self.X = X
+            self.y = y
+        
+        def __len__(self):
+            return len(self.X)
+        
+        def __getitem__(self, idx):
+            return self.X[idx], self.y[idx]
+
+    dataset = StockDataset(X_tensor, y_tensor)
+
+    train_size = int(0.8 * len(dataset))
+    test_size = len(dataset) - train_size
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
+    return train_dataset, test_dataset, feature_columns
 
 def get_train_test(stock_df: pd.DataFrame, tickers: List[str], start_date: str, end_date: str, task: str = 'classification') -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
